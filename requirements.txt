@@ -1,0 +1,8 @@
+tensorflow-gpu
+larq
+sklearn
+pandas
+keras-tuner
+mlflow
+matplotlib
+ConfigSpace

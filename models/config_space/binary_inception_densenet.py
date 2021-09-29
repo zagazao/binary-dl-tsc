@@ -27,16 +27,14 @@ class BinaryInception(TSCHyperModel):
 
         x = input_l
 
-        input_res = input_l
-
         x = self._make_inception_module(x)
 
         for d in range(self.depth):
-            x = self._make_binary_inception_module(x)
+            x = self._make_dense_inception_block(x, 32, 4)
 
-            if self.use_residual:
-                x = self._make_shortcut_layer(input_res, x)
-                input_res = x
+            # Reduce temporal dimension every 2 blocks
+            temporal_reduction = 1 if d % 2 == 0 else 2
+            x = self._make_transition_block(x, temporal_reduction, 2)
 
         x = tf.keras.layers.GlobalAveragePooling1D()(x)
         out = tf.keras.layers.Dense(self.n_classes, activation='softmax')(x)
@@ -44,12 +42,46 @@ class BinaryInception(TSCHyperModel):
         model = tf.keras.Model(inputs=input_l, outputs=out)
 
         model.compile(
-            loss='categorical_crossentropy',
+            loss='categorical_cross_entropy',
             optimizer=tf.keras.optimizers.Adam(learning_rate=hp['learning_rate'], decay=hp['decay']),
             metrics=METRICS,
         )
 
         return model
+
+    def _make_dense_block(self, x, filters, n_convs):
+        # x = tf.keras.layers.Conv1D(filters, kernel_size=1, padding='same')(x)
+
+        inputs = [x]
+        for i in range(n_convs):
+            x = tf.keras.layers.Conv1D(filters, kernel_size=3, padding='same')(x)
+            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.Activation(activation='relu')(x)
+
+            inputs.append(x)
+            x = tf.keras.layers.Concatenate(axis=2)(inputs)
+
+        return x
+
+    def _make_transition_block(self, x, reduction_factor_temporal=2, reduction_factor_spatial=2):
+        # Conv1D to reduce channel dim
+        x = tf.keras.layers.Conv1D(int(x.shape[-1] // reduction_factor_spatial),
+                                   kernel_size=1,
+                                   padding='valid')(x)
+        x = tf.keras.layers.AveragePooling1D(reduction_factor_temporal)(x)
+        x = tf.keras.layers.BatchNormalization()(x)
+        x = tf.keras.layers.Activation('relu')(x)
+        return x
+
+    def _make_dense_inception_block(self, x, filters, n_convs):
+        inputs = [x]
+        for i in range(n_convs):
+            x = self._make_inception_module(x)
+
+            inputs.append(x)
+            x = tf.keras.layers.Concatenate(axis=2)(inputs)
+
+        return x
 
     def _setup_config_space(self):
         self.search_space.add_hyperparameter(
@@ -133,3 +165,4 @@ if __name__ == '__main__':
     model = factory.sample_architecture()
 
     lq.models.summary(model)
+    # tf.keras.utils.plot_model(model)

@@ -7,6 +7,7 @@ from models.config_space.binary_quick_net_cs import TSCHyperModel
 
 
 # So, how does
+from models.config_space.metric_utils import METRICS
 
 
 def conv_block(n, n_filter, filter_size=(3, 3), strides=(1, 1), name='conv_block'):
@@ -69,8 +70,9 @@ class BinaryMobileNetV1(TSCHyperModel):
         # model = tf.keras.Model(inputs=input_l, outputs=out)
 
         model.compile(
-            loss='categorical_cross_entropy',
-            optimizer=tf.keras.optimizers.Adam(learning_rate=hp['learning_rate']) # , weight_decay=hp['decay']
+            loss='categorical_crossentropy',
+            optimizer=tf.keras.optimizers.Adam(learning_rate=hp['learning_rate']),
+            metrics=METRICS,
         )
 
         return model

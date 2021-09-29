@@ -1,11 +1,10 @@
-import larq as lq
 import mlflow
 import tensorflow as tf
 from larq.models import ModelProfile
 
 import utils
-from models.config_space.binary_dense_net_cs import HyperBinaryDenseNet
-# from utils import utils
+from bench import TFLiteModelBenchmark
+from models.loader import BINARY_CLASSIFIER_NAMES, load_model
 from utils.my_utils import prepare_targets, StopOnNanLossCallback
 from utils.utils import read_dataset
 
@@ -45,48 +44,67 @@ for dataset_idx, name in enumerate(utils.constants.UNIVARIATE_DATASET_NAMES_2018
 
     x_train, y_train_org, x_test, y_test_org = dataset[name]
 
-    # Only consider binary classification for now (acc is easier to interpret)
+    y_train, y_test, n_classes, label_enc = prepare_targets(y_train_org, y_test_org)
+    x_train, x_test = add_time_channel(x_train, x_test)
+
     # if len(np.unique(y_test_org)) > 2:
-    #     continue
+    #     #     continue
 
     if x_train.shape[1] < 500:
         continue
 
     print(x_train.shape)
 
-    y_train, y_test, n_classes, label_enc = prepare_targets(y_train_org, y_test_org)
-    x_train, x_test = add_time_channel(x_train, x_test)
-
     print(f'Number of classes : {n_classes}')
     print(x_train.shape)
 
-    net_factory = HyperBinaryDenseNet(x_train.shape[1:], n_classes)
-    cfg_obj = net_factory.get_config_space()
+    # net_factory = HyperBinary
 
-    for cfg in cfg_obj.sample_configuration(N_CONFIGS):
-        with mlflow.start_run():
-            # Log hyper parameters
-            mlflow.log_params(cfg)
-            mlflow.tensorflow.autolog()
+    for classifier_name in BINARY_CLASSIFIER_NAMES:
+        classifier_factory = load_model(classifier_name, x_train.shape[1:], n_classes)
 
-            model = net_factory.build(cfg)
+        for architecture_idx, architecture in enumerate(classifier_factory.search_space.sample_configuration(3)):
+            model = classifier_factory.build(architecture)
+
             model_info = extract_model_information(model)
-            mlflow.log_metrics(model_info)
 
-            mlflow.set_tag('dataset', name)
+            with mlflow.start_run():
+                mlflow.tensorflow.autolog()
 
-            # mlflow.set_tag('platform', 'intel')
+                try:
 
-            lq.models.summary(model)
+                    mlflow.log_metrics(model_info)
+                    mlflow.set_tag('dataset', name)
+                    mlflow.set_tag('classifier_name', classifier_name)
+                    mlflow.set_tag('architecture_idx', architecture_idx)
+                    mlflow.log_params(architecture)
 
-            history = model.fit(
-                x_train,
-                y_train,
-                validation_data=(x_test, y_test),
-                epochs=1000,
-                shuffle=True,
-                batch_size=32,
-                callbacks=[tf.keras.callbacks.EarlyStopping('val_accuracy', patience=100),
-                           StopOnNanLossCallback()],
-                verbose=1
-            )
+                    history = model.fit(
+                        x_train,
+                        y_train,
+                        validation_data=(x_test, y_test),
+                        epochs=1000,
+                        shuffle=True,
+                        batch_size=32,
+                        callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                                                                    patience=100),
+                                   tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss',
+                                                                        factor=0.5,
+                                                                        patience=25,
+                                                                        min_lr=0.001),
+                                   StopOnNanLossCallback()],
+                        verbose=1
+                    )
+
+                    # Benchmark model
+                    bench_obj = TFLiteModelBenchmark()
+                    bench_result = bench_obj.benchmark(model)
+
+                    mlflow.log_metric('avg_runtime_us', bench_result.avg_run_time)
+                    mlflow.log_metric('min_runtime_us', bench_result.min_run_time)
+                    mlflow.log_metric('max_runtime_us', bench_result.max_run_time)
+                    mlflow.log_metric('std_runtime_us', bench_result.std_run_time)
+
+                except Exception as err:
+                    print(err)
+                    continue

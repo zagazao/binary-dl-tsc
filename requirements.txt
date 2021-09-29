@@ -6,3 +6,4 @@ keras-tuner
 mlflow
 matplotlib
 ConfigSpace
+larq-compute-engine

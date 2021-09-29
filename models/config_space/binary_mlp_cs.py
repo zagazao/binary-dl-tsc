@@ -3,6 +3,7 @@ import larq as lq
 import tensorflow as tf
 
 from models.config_space.binary_quick_net_cs import TSCHyperModel
+from models.config_space.metric_utils import METRICS
 
 
 class BinaryMLP(TSCHyperModel):
@@ -30,8 +31,9 @@ class BinaryMLP(TSCHyperModel):
         model = tf.keras.Model(inputs=input_l, outputs=out)
 
         model.compile(
-            loss='categorical_cross_entropy',
-            optimizer=tf.keras.optimizers.Adam(learning_rate=hp['learning_rate'], decay=hp['decay'])
+            loss='categorical_crossentropy',
+            optimizer=tf.keras.optimizers.Adam(learning_rate=hp['learning_rate'], decay=hp['decay']),
+            metrics=METRICS,
         )
 
         return model

@@ -5,6 +5,8 @@ import larq.models
 import tensorflow as tf
 from keras_tuner import HyperModel
 
+from models.config_space.metric_utils import METRICS
+
 
 class TSCHyperModel(HyperModel):
 
@@ -32,7 +34,7 @@ class TSCHyperModel(HyperModel):
         raise NotImplementedError
 
 
-class HyperBinaryDenseNet(TSCHyperModel):
+class BinaryQuickNet(TSCHyperModel):
     def __init__(self, input_shape, n_classes, seed=1234):
         super().__init__(input_shape, n_classes, seed)
 
@@ -111,7 +113,7 @@ class HyperBinaryDenseNet(TSCHyperModel):
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
                                                          decay=self.decay),
                       loss="categorical_crossentropy",
-                      metrics=["accuracy"],
+                      metrics=METRICS,
                       )
 
         return model
@@ -148,22 +150,6 @@ class HyperBinaryDenseNet(TSCHyperModel):
     # noinspection PyCallingNonCallable
     def _create_dense_block(self, x, dilation_rate):
         y = tf.keras.layers.BatchNormalization(momentum=0.9, epsilon=1e-5)(x)
-        # y = lq.layers.QuantSeparableConv1D(filters=self.growth_rate,
-        #                                    kernel_size=3,
-        #                                    dilation_rate=dilation_rate,
-        #                                    depthwise_quantizer=self.quant_fn,
-        #                                    pointwise_quantizer=self.quant_fn,
-        #                                    # depthwise_regularizer=self.quant_fn,
-        #                                    # pointwise_regularizer=self.quant_fn,
-        #                                    # input_quantizer=self.quant_fn,
-        #                                    # kernel_quantizer=self.quant_fn,
-        #                                    kernel_initializer="glorot_normal",
-        #                                    kernel_constraint="weight_clip",  # TODO: Rein damit
-        #                                    depthwise_constraint="weight_clip",
-        #                                    pointwise_constraint="weight_clip",
-        #                                    padding="same",
-        #                                    use_bias=False,
-        #                                    )(y)
 
         y = lq.layers.QuantConv1D(filters=self.growth_rate,
                                   kernel_size=3,
@@ -191,7 +177,7 @@ class HyperBinaryDenseNet(TSCHyperModel):
 
 
 if __name__ == '__main__':
-    factory = HyperBinaryDenseNet(input_shape=(135, 3), n_classes=3)
+    factory = BinaryQuickNet(input_shape=(135, 3), n_classes=3)
     model = factory.sample_architecture()
 
     # print(model)

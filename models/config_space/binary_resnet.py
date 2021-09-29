@@ -6,7 +6,7 @@ from models.config_space.binary_quick_net_cs import TSCHyperModel
 from models.config_space.metric_utils import METRICS
 
 
-class BinaryFCN(TSCHyperModel):
+class BinaryResNet(TSCHyperModel):
 
     def __init__(self, input_shape, n_classes, seed=1234):
         super().__init__(input_shape, n_classes, seed)
@@ -17,11 +17,14 @@ class BinaryFCN(TSCHyperModel):
         self.initial_filters = 32
 
         input_l = tf.keras.layers.Input(self.input_shape)
-        x = self._make_input_block(input_l, 128, 8)
-        x = self._make_conv_bn_block(x, 256, 5)
-        x = self._make_conv_bn_block(x, 128, 3)
 
-        x = tf.keras.layers.GlobalAveragePooling1D()(x)
+        x = tf.keras.layers.Flatten()(input_l)
+        x = tf.keras.layers.Dense(500)(x)
+        x = tf.keras.layers.BatchNormalization()(x)
+        x = tf.keras.layers.Activation('relu')(x)
+
+        for i in range(2):
+            x = self._make_quant_dense_bn_block(x, 500, 0.25)
 
         out = tf.keras.layers.Dense(self.n_classes, activation='softmax')(x)
 
@@ -35,19 +38,12 @@ class BinaryFCN(TSCHyperModel):
 
         return model
 
-    def _make_input_block(self, x, filters, kernel_size, padding='same'):
-        x = tf.keras.layers.Conv1D(filters, kernel_size, padding=padding)(x)
-        x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.Activation('relu')(x)
-        return x
-
-    def _make_conv_bn_block(self, x, filters, kernel_size, padding='same'):
-        # x = tf.keras.layers.Conv1D(filters, kernel_size, padding=padding)(x)
-        x = lq.layers.QuantConv1D(filters=filters,
-                                  kernel_size=kernel_size,
-                                  padding=padding,
-                                  kernel_quantizer=self.quant_fn,
-                                  input_quantizer=self.quant_fn)(x)
+    def _make_quant_dense_bn_block(self, x, num_hidden, dropout_rate=0.5):
+        x = tf.keras.layers.Dropout(dropout_rate)(x)
+        x = lq.layers.QuantDense(num_hidden,
+                                 input_quantizer=self.quant_fn,
+                                 kernel_quantizer=self.quant_fn,
+                                 kernel_constraint='weight_clip')(x)
         x = tf.keras.layers.BatchNormalization()(x)
         return x
 
@@ -65,8 +61,7 @@ class BinaryFCN(TSCHyperModel):
 
 
 if __name__ == '__main__':
-    factory = BinaryFCN(input_shape=(135, 3), n_classes=3)
+    factory = BinaryResNet(input_shape=(135, 3), n_classes=3)
     model = factory.sample_architecture()
 
-    # print(model)
     lq.models.summary(model)

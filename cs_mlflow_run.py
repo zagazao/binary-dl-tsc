@@ -1,3 +1,5 @@
+import os
+
 import mlflow
 import tensorflow as tf
 from larq.models import ModelProfile
@@ -8,9 +10,11 @@ from models.loader import BINARY_CLASSIFIER_NAMES, load_model
 from utils.my_utils import prepare_targets, StopOnNanLossCallback
 from utils.utils import read_dataset
 
-DATA_SET_PATH = '/home/lukas/data/tsc'
+DATA_SET_PATH = os.path.expanduser('~/data/tsc/')
 
-N_CONFIGS = 10
+mlflow.set_tracking_uri('file:///data/s1/heppe/mlflow-runs/')
+
+N_CONFIGS = 3
 
 
 ### QuantSeparableConv1D
@@ -47,9 +51,6 @@ for dataset_idx, name in enumerate(utils.constants.UNIVARIATE_DATASET_NAMES_2018
     y_train, y_test, n_classes, label_enc = prepare_targets(y_train_org, y_test_org)
     x_train, x_test = add_time_channel(x_train, x_test)
 
-    # if len(np.unique(y_test_org)) > 2:
-    #     #     continue
-
     if x_train.shape[1] < 500:
         continue
 
@@ -58,12 +59,10 @@ for dataset_idx, name in enumerate(utils.constants.UNIVARIATE_DATASET_NAMES_2018
     print(f'Number of classes : {n_classes}')
     print(x_train.shape)
 
-    # net_factory = HyperBinary
-
     for classifier_name in BINARY_CLASSIFIER_NAMES:
         classifier_factory = load_model(classifier_name, x_train.shape[1:], n_classes)
 
-        for architecture_idx, architecture in enumerate(classifier_factory.search_space.sample_configuration(3)):
+        for architecture_idx, architecture in enumerate(classifier_factory.search_space.sample_configuration(N_CONFIGS)):
             model = classifier_factory.build(architecture)
 
             model_info = extract_model_information(model)

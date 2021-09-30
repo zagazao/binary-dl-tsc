@@ -5,7 +5,7 @@ import tensorflow as tf
 from larq.models import ModelProfile
 
 import utils
-from bench import TFLiteModelBenchmark
+from bench import TFLiteModelBenchmark, HostBinaryExecutionEngine
 from models.loader import BINARY_CLASSIFIER_NAMES, load_model
 from utils.my_utils import prepare_targets, StopOnNanLossCallback
 from utils.utils import read_dataset
@@ -96,7 +96,7 @@ for dataset_idx, name in enumerate(utils.constants.UNIVARIATE_DATASET_NAMES_2018
                     )
 
                     # Benchmark model
-                    bench_obj = TFLiteModelBenchmark()
+                    bench_obj = TFLiteModelBenchmark(executor=HostBinaryExecutionEngine(binary=os.path.expanduser('~/bin/lce_benchmark_model')))
                     bench_result = bench_obj.benchmark(model)
 
                     mlflow.log_metric('avg_runtime_us', bench_result.avg_run_time)

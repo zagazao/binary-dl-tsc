@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import shutil
 import subprocess
 import uuid
 from copy import copy
@@ -90,10 +91,17 @@ class BenchmarkExecutionEngine(object):
 
 
 class HostBinaryExecutionEngine(BenchmarkExecutionEngine):
-    BINARY_PATH = '/home/lukas/.cache/bazel/_bazel_lukas/d2dd8a325d50df27d1db297b254043e3/execroot/org_tensorflow/bazel-out/k8-opt/bin/tensorflow/lite/tools/benchmark/benchmark_model'
+    # BINARY_PATH = '/home/lukas/.cache/bazel/_bazel_lukas/d2dd8a325d50df27d1db297b254043e3/execroot/org_tensorflow/bazel-out/k8-opt/bin/tensorflow/lite/tools/benchmark/benchmark_model'
 
-    def __init__(self, execution_ops=None):
+    def __init__(self, binary=None, execution_ops=None):
         # Num runs etc..
+        if binary is None:
+            binary = shutil.which('benchmark_model')
+            if binary is None:
+                raise RuntimeError('Binary "benchmark_model" not found in path.')
+        else:
+            self.BINARY_PATH = binary
+
         self.execution_ops = execution_ops
 
     def benchmark(self, input_file, output_file):

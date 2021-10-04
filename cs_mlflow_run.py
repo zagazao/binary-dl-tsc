@@ -10,11 +10,16 @@ from models.loader import BINARY_CLASSIFIER_NAMES, load_model
 from utils.my_utils import prepare_targets, StopOnNanLossCallback
 from utils.utils import read_dataset
 
-DATA_SET_PATH = os.path.expanduser('~/data/tsc/')
+DATA_SET_PATH = os.path.expanduser('/rdata/s01b_ls8_000/heppe/data/')
 
-mlflow.set_tracking_uri('file:///data/s1/heppe/mlflow-runs/')
+# DATA_SET_PATH = os.path.expanduser('~/data/tsc/')
+mlflow.set_tracking_uri('file:///rdata/s01b_ls8_000/heppe/data/mlruns/')
+# mlflow.set_tracking_uri('file:///home/lukas/data/mlruns-test/')
 
 N_CONFIGS = 3
+
+tracking_uri = mlflow.get_tracking_uri()
+print("Current tracking uri: {}".format(tracking_uri))
 
 
 ### QuantSeparableConv1D

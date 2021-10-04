@@ -2,6 +2,7 @@ from models.config_space.binary_fcn_cs import BinaryFCN
 from models.config_space.binary_inception import BinaryInception
 from models.config_space.binary_mlp_cs import BinaryMLP
 from models.config_space.binary_quick_net_cs import BinaryQuickNet
+from models.config_space.binary_resnet import BinaryResNet
 
 BINARY_CLASSIFIER_NAMES = [
     'BINARY_QUICKNET',
@@ -24,4 +25,6 @@ def load_model(classifier_name, input_shape, num_classes):
         return BinaryInception(input_shape, num_classes)
     elif classifier_name == 'BINARY_QUICKNET':
         return BinaryQuickNet(input_shape, num_classes)
+    elif classifier_name == 'BINARY_RESNET':
+        return BinaryResNet(input_shape, num_classes)
 

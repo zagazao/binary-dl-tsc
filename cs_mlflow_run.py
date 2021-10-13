@@ -1,7 +1,10 @@
+import argparse
 import os
 
+import larq as lq
 import mlflow
 import tensorflow as tf
+from ConfigSpace.util import generate_grid
 from larq.models import ModelProfile
 
 import utils
@@ -10,19 +13,6 @@ from models.loader import BINARY_CLASSIFIER_NAMES, load_model
 from utils.my_utils import prepare_targets, StopOnNanLossCallback
 from utils.utils import read_dataset
 
-DATA_SET_PATH = os.path.expanduser('/rdata/s01b_ls8_000/heppe/data/')
-
-# DATA_SET_PATH = os.path.expanduser('~/data/tsc/')
-mlflow.set_tracking_uri('file:///rdata/s01b_ls8_000/heppe/data/mlruns/')
-# mlflow.set_tracking_uri('file:///home/lukas/data/mlruns-test/')
-
-N_CONFIGS = 3
-
-tracking_uri = mlflow.get_tracking_uri()
-print("Current tracking uri: {}".format(tracking_uri))
-
-
-### QuantSeparableConv1D
 
 def add_time_channel(x_train, x_test):
     x_train = tf.expand_dims(x_train, 2)
@@ -46,69 +36,103 @@ def extract_model_information(model):
     return metrics
 
 
-for dataset_idx, name in enumerate(utils.constants.UNIVARIATE_DATASET_NAMES_2018):
-    print('-' * 50)
+def main(args):
+    mlflow.set_tracking_uri(args.tracking_uri)
+    tracking_uri = mlflow.get_tracking_uri()
+    print("Current tracking uri: {}".format(tracking_uri))
 
-    dataset = read_dataset(DATA_SET_PATH, 'UCRArchive_2018', name)
+    for dataset_idx, name in enumerate(utils.constants.UNIVARIATE_DATASET_NAMES_2018):
+        print('-' * 50)
 
-    x_train, y_train_org, x_test, y_test_org = dataset[name]
+        dataset = read_dataset(args.dataset_path, 'UCRArchive_2018', name)
 
-    y_train, y_test, n_classes, label_enc = prepare_targets(y_train_org, y_test_org)
-    x_train, x_test = add_time_channel(x_train, x_test)
+        x_train, y_train_org, x_test, y_test_org = dataset[name]
 
-    if x_train.shape[1] < 500:
-        continue
+        y_train, y_test, n_classes, label_enc = prepare_targets(y_train_org, y_test_org)
+        x_train, x_test = add_time_channel(x_train, x_test)
+        print('DATASET:', name)
 
-    print(x_train.shape)
+        # if n_classes != 2:
+        #     continue
+        #
+        # if x_train.shape[1] < 500:
+        #     continue
 
-    print(f'Number of classes : {n_classes}')
-    print(x_train.shape)
+        print(f'Number of classes : {n_classes}')
+        print(x_train.shape)
 
-    for classifier_name in BINARY_CLASSIFIER_NAMES:
-        classifier_factory = load_model(classifier_name, x_train.shape[1:], n_classes)
+        for classifier_name in BINARY_CLASSIFIER_NAMES:
+            classifier_factory = load_model(classifier_name, x_train.shape[1:], n_classes)
 
-        for architecture_idx, architecture in enumerate(classifier_factory.search_space.sample_configuration(N_CONFIGS)):
-            model = classifier_factory.build(architecture)
+            search_space_size = len(generate_grid(classifier_factory.search_space))
 
-            model_info = extract_model_information(model)
+            n_configs = min(args.narchitectures, search_space_size)
 
-            with mlflow.start_run():
-                mlflow.tensorflow.autolog()
+            for architecture_idx, architecture in enumerate(classifier_factory.search_space.sample_configuration(n_configs)):
+                print(architecture)
 
-                try:
+                for repeat in range(args.repeats):
 
-                    mlflow.log_metrics(model_info)
-                    mlflow.set_tag('dataset', name)
-                    mlflow.set_tag('classifier_name', classifier_name)
-                    mlflow.set_tag('architecture_idx', architecture_idx)
-                    mlflow.log_params(architecture)
+                    model = classifier_factory.build(architecture)
 
-                    history = model.fit(
-                        x_train,
-                        y_train,
-                        validation_data=(x_test, y_test),
-                        epochs=1000,
-                        shuffle=True,
-                        batch_size=32,
-                        callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                                    patience=100),
-                                   tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss',
-                                                                        factor=0.5,
-                                                                        patience=25,
-                                                                        min_lr=0.001),
-                                   StopOnNanLossCallback()],
-                        verbose=1
-                    )
+                    print(lq.models.summary(model))
 
-                    # Benchmark model
-                    bench_obj = TFLiteModelBenchmark(executor=HostBinaryExecutionEngine(binary=os.path.expanduser('~/bin/lce_benchmark_model')))
-                    bench_result = bench_obj.benchmark(model)
+                    model_info = extract_model_information(model)
 
-                    mlflow.log_metric('avg_runtime_us', bench_result.avg_run_time)
-                    mlflow.log_metric('min_runtime_us', bench_result.min_run_time)
-                    mlflow.log_metric('max_runtime_us', bench_result.max_run_time)
-                    mlflow.log_metric('std_runtime_us', bench_result.std_run_time)
+                    with mlflow.start_run():
+                        mlflow.tensorflow.autolog()
 
-                except Exception as err:
-                    print(err)
-                    continue
+                        try:
+                            mlflow.log_metrics(model_info)
+
+                            mlflow.set_tags({
+                                'dataset': name,
+                                'classifier_name': classifier_name,
+                                'architecture_idx': architecture_idx,
+                                'repeat': repeat
+                            })
+
+                            mlflow.log_params(architecture)
+
+                            history = model.fit(
+                                x_train,
+                                y_train,
+                                validation_data=(x_test, y_test),
+                                epochs=2500,
+                                shuffle=True,
+                                batch_size=32,
+                                callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                                                                            patience=150),
+                                           tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss',
+                                                                                factor=0.5,
+                                                                                patience=50,
+                                                                                min_lr=0.0001),
+                                           StopOnNanLossCallback()],
+                                verbose=1
+                            )
+
+                            # Benchmark model
+                            bench_obj = TFLiteModelBenchmark(executor=HostBinaryExecutionEngine(binary=os.path.expanduser('~/bin/lce_benchmark_model')))
+                            bench_result = bench_obj.benchmark(model)
+
+                            mlflow.log_metric('avg_runtime_us', bench_result.avg_run_time)
+                            mlflow.log_metric('min_runtime_us', bench_result.min_run_time)
+                            mlflow.log_metric('max_runtime_us', bench_result.max_run_time)
+                            mlflow.log_metric('std_runtime_us', bench_result.std_run_time)
+
+                        except Exception as err:
+                            print(err)
+                            continue
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--repeats', default=5, type=int)
+    parser.add_argument('--narchitectures', default=3, type=int)
+    parser.add_argument('--dataset-path', type=str)
+    parser.add_argument('--tracking-uri', type=str)
+
+    args = parser.parse_args()
+
+    main(args)

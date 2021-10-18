@@ -51,13 +51,7 @@ def main(args):
         y_train, y_test, n_classes, label_enc = prepare_targets(y_train_org, y_test_org)
         x_train, x_test = add_time_channel(x_train, x_test)
         print('DATASET:', name)
-
-        # if n_classes != 2:
-        #     continue
-        #
-        # if x_train.shape[1] < 500:
-        #     continue
-
+        
         print(f'Number of classes : {n_classes}')
         print(x_train.shape)
 
@@ -126,6 +120,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    # --datset-path /rdata/s01b_ls8_000/heppe/data/ --repeats 5 --tracking-uri file:///rdata/s01b_ls8_000/heppe/data/mlruns/
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--repeats', default=5, type=int)

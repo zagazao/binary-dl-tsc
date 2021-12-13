@@ -92,7 +92,7 @@ class BenchmarkExecutionEngine(object):
 
 class HostBinaryExecutionEngine(BenchmarkExecutionEngine):
     # BINARY_PATH = '/home/lukas/.cache/bazel/_bazel_lukas/d2dd8a325d50df27d1db297b254043e3/execroot/org_tensorflow/bazel-out/k8-opt/bin/tensorflow/lite/tools/benchmark/benchmark_model'
-
+    # Get Binary from : https://docs.larq.dev/compute-engine/benchmark/
     def __init__(self, binary=None, execution_ops=None):
         # Num runs etc..
         if binary is None:
